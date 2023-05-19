@@ -1,23 +1,31 @@
 mod vm;
-use vm::{VMState, CODE_SIZE, MEM_SIZE};
+mod interpreter;
+mod instruction_interpreter;
+mod instruction;
+
+use std::fs;
+use std::fs::File;
+use std::io::Read;
+use vm::{VMState, CODE_SIZE};
+use crate::interpreter::interpreter_loop;
 
 fn main() {
     println!("[+] This is an custom emulator. It emulates a completely custom");
     println!("[+] architecture that we call \"Yan85\"!");
 
-    let mut vm_state = VMState {
-        code: [0i8; CODE_SIZE],
-        mem: [0i8; MEM_SIZE],
-        reg_a: Default::default(),
-        reg_b: Default::default(),
-        reg_c: Default::default(),
-        reg_d: Default::default(),
-        reg_s: Default::default(),
-        reg_i: Default::default(),
-        reg_f: Default::default(),
-    };
-    
-    
+    if let Some(file_path) = std::env::args().nth(1){
+        let file = File::open(file_path);
 
-    println!("{}", vm_state);
+        match file {
+            Ok(mut file) =>{
+                let mut vm_state = VMState::default();
+                file.read(&mut vm_state.code).expect("Failed to read file contents");
+                vm_state.code.resize(CODE_SIZE, 0u8);
+                interpreter_loop(&mut vm_state);
+            },
+            Err(error) => panic!("Error opening the file {:?}", error)
+        }
+    }else {
+        println!("Usage: [binary] [file_path]")
+    }
 }
