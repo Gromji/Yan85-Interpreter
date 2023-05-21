@@ -3,7 +3,6 @@ mod interpreter;
 mod instruction_interpreter;
 mod instruction;
 
-use std::fs;
 use std::fs::File;
 use std::io::Read;
 use vm::{VMState, CODE_SIZE};
