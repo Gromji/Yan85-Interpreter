@@ -1,3 +1,6 @@
+use std::thread::sleep;
+use std::time;
+use libc::{c_char, c_int};
 use crate::instruction::{describe_reg, Instruction};
 use crate::vm::VMState;
 
@@ -13,7 +16,7 @@ pub fn interpret_instruction(vm_state: &mut VMState, instruction: Instruction) {
         0x10 => interpret_ldm(vm_state, &instruction),
         0x20 => interpret_cmp(vm_state, &instruction),
         0x40 => interpret_jmp(vm_state, &instruction),
-        /** TODO: 0x80 => interpret_sys(vm_state, &instruction), */
+        0x80 => interpret_sys(vm_state, &instruction),
         _ => panic!("Unknown op code!")
     }
 }
@@ -117,4 +120,65 @@ fn interpret_jmp(vm_state: &mut VMState, instruction: &Instruction) {
         println!("[j] ... TAKEN");
         vm_state.reg_i = read_reg(vm_state, instruction.second)
     }
+}
+
+fn interpret_sys(vm_state: &mut VMState, instruction: &Instruction) {
+    match instruction.first {
+        0x1 => {
+            println!("[s] ... open");
+            unsafe {
+                let result = libc::open((vm_state.mem.as_mut_ptr().offset(vm_state.reg_a as isize)) as *const c_char, vm_state.reg_b as c_int);
+                write_reg(vm_state, instruction.second, result as u8);
+            }
+        }
+        0x2 => {
+            println!("[s] ... read_code");
+            unsafe {
+                let mut count = vm_state.reg_c as u32;
+                if 3 * (256u32 - vm_state.reg_b as u32) <= count {
+                    count = 3 * (256u32 - vm_state.reg_b as u32);
+                }
+
+                let result = libc::read(vm_state.reg_a as c_int, vm_state.code.as_mut_ptr().offset((3 * vm_state.reg_b) as isize) as *mut libc::c_void, count as libc::c_uint);
+                write_reg(vm_state, instruction.second, result as u8);
+            }
+        }
+        0x4 => {
+            println!("[s] ... read_memory");
+            unsafe {
+                let mut count = vm_state.reg_c as u32;
+                if 256u32 - vm_state.reg_b as u32 <= count {
+                    count = 256u32 - vm_state.reg_b as u32;
+                }
+
+                let result = libc::read(vm_state.reg_a as c_int, vm_state.mem.as_mut_ptr().offset(vm_state.reg_b as isize) as *mut libc::c_void, count as libc::c_uint);
+                write_reg(vm_state, instruction.second, result as u8);
+            }
+        }
+        0x8 => {
+            println!("[s] ... write");
+            let mut count = vm_state.reg_c as u32;
+            if 256u32 - vm_state.reg_c as u32 <= count {
+                count = 256u32 - vm_state.reg_c as u32;
+            }
+            unsafe {
+                let result = libc::write(vm_state.reg_a as c_int, vm_state.mem.as_mut_ptr().offset(vm_state.reg_b as isize) as *mut libc::c_void, count);
+                write_reg(vm_state, instruction.second, result as u8);
+            }
+        }
+        0x10 => {
+            println!("[s] ... sleep");
+            sleep(time::Duration::from_millis(vm_state.reg_a as u64));
+            write_reg(vm_state, instruction.second, vm_state.reg_a);
+        }
+        0x20 => {
+            println!("[s] ... exit");
+            unsafe {
+                libc::exit(vm_state.reg_a as c_int);
+            }
+        }
+        _ => panic!("Unknown syscall number")
+    }
+
+    println!("[s] ... return value (in register {}): {:x}", describe_reg(instruction.second), read_reg(vm_state, instruction.second))
 }
